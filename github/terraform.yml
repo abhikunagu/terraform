@@ -1,38 +1,37 @@
-name: "Terraform Automation"
+provider "azurerm" {
+  features {}
+}
 
-on:
-  push:
-    branches:
-      - main  # Change if using a different branch
+resource "azurerm_resource_group" "backup_rg" {
+  name     = "backup-resource-group"
+  location = "East US"
+}
 
-permissions:
-  contents: read
-  id-token: write
+resource "azurerm_recovery_services_vault" "backup_vault" {
+  name                = "my-backup-vault"
+  location            = azurerm_resource_group.backup_rg.location
+  resource_group_name = azurerm_resource_group.backup_rg.name
+  sku                 = "Standard"
+}
 
-jobs:
-  terraform:
-    name: "Terraform Apply"
-    runs-on: ubuntu-latest
+resource "azurerm_backup_policy_vm" "backup_policy" {
+  name                = "daily-backup-policy"
+  resource_group_name = azurerm_resource_group.backup_rg.name
+  recovery_vault_name = azurerm_recovery_services_vault.backup_vault.name
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+  backup {
+    frequency = "Daily"
+    time      = "12:00"
+  }
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: 1.3.0
+  retention_daily {
+    count = 30 # Retain backups for 30 days
+  }
+}
 
-      - name: Authenticate with Azure
-        run: |
-          echo "Logging into Azure..."
-          az login --service-principal -u ${{ secrets.ARM_CLIENT_ID }} -p ${{ secrets.ARM_CLIENT_SECRET }} --tenant ${{ secrets.ARM_TENANT_ID }}
-
-      - name: Terraform Init
-        run: terraform init
-
-      - name: Terraform Plan
-        run: terraform plan
-
-      - name: Terraform Apply
-        run: terraform apply -auto-approve
+resource "azurerm_backup_protected_vm" "protected_vm" {
+  resource_group_name = azurerm_resource_group.backup_rg.name
+  recovery_vault_name = azurerm_recovery_services_vault.backup_vault.name
+  source_vm_id        = "/subscriptions/xxxx/resourceGroups/xxxx/providers/Microsoft.Compute/virtualMachines/xxxx" # Replace with actual VM ID
+  backup_policy_id    = azurerm_backup_policy_vm.backup_policy.id
+}
