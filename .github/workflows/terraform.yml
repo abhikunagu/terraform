@@ -1,0 +1,54 @@
+name: "Terraform Automation"
+on:
+  push:
+    branches:
+      - main # Change if using a different branch
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  terraform:
+    name: "Terraform Apply"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.3.0
+
+      - name: Login to Azure
+        run: |
+          echo "🔄 Logging into Azure..."
+          
+          # Debugging: Print variables (Don't expose secrets in real logs)
+          echo "Checking Azure Secrets..."
+          echo "AZURE_CLIENT_ID length: ${#AZURE_CLIENT_ID}"
+          echo "AZURE_TENANT_ID length: ${#AZURE_TENANT_ID}"
+          
+          # Ensure secrets are set
+          if [[ -z "$AZURE_CLIENT_ID" || -z "$AZURE_CLIENT_SECRET" || -z "$AZURE_TENANT_ID" ]]; then
+            echo "❌ ERROR: Missing Azure credentials!"
+            exit 1
+          fi
+          
+          # Authenticate with Azure
+          az login --service-principal \
+            --username "8e493859-65f9-4123-937f-43389f87a632" \
+            --password "u1J8Q~dxRPN1.7s00CANUs.zrxfXlCVDXn2J3cUm" \
+            --tenant "314254ef-57e5-4f12-8f67-1c309bc2394b"
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Plan
+        run: terraform plan
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
