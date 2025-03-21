@@ -1,0 +1,37 @@
+provider "azurerm" {
+  features {}
+}
+
+resource "azurerm_resource_group" "backup_rg" {
+  name     = "backup-resource-group"
+  location = "East US"
+}
+
+resource "azurerm_recovery_services_vault" "backup_vault" {
+  name                = "my-backup-vault"
+  location            = azurerm_resource_group.backup_rg.location
+  resource_group_name = azurerm_resource_group.backup_rg.name
+  sku                 = "Standard"
+}
+
+resource "azurerm_backup_policy_vm" "backup_policy" {
+  name                = "daily-backup-policy"
+  resource_group_name = azurerm_resource_group.backup_rg.name
+  recovery_vault_name = azurerm_recovery_services_vault.backup_vault.name
+
+  backup {
+    frequency = "Daily"
+    time      = "12:00"
+  }
+
+  retention_daily {
+    count = 30 # Retain backups for 30 days
+  }
+}
+
+resource "azurerm_backup_protected_vm" "protected_vm" {
+  resource_group_name = azurerm_resource_group.backup_rg.name
+  recovery_vault_name = azurerm_recovery_services_vault.backup_vault.name
+  source_vm_id        = "/subscriptions/xxxx/resourceGroups/xxxx/providers/Microsoft.Compute/virtualMachines/xxxx" # Replace with actual VM ID
+  backup_policy_id    = azurerm_backup_policy_vm.backup_policy.id
+}
